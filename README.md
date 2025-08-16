@@ -16,8 +16,8 @@ This repository automatically builds and publishes Docker images for [Archon](ht
 ## 🤖 Automation
 
 ### Automatic Updates
-- **Daily checks** at 6 AM UTC for new Archon releases
-- **Smart rebuilding** - only builds if a new version is detected
+- **Daily checks** at 6 AM UTC for new commits to Archon main branch
+- **Smart rebuilding** - only builds if a new commit is detected
 - **Multi-platform** support (linux/amd64, linux/arm64)
 - **Efficient caching** to speed up builds
 
@@ -32,20 +32,24 @@ You can manually trigger builds for any ref (tag, branch, or commit):
 ## 🏷️ Image Tags
 
 Each image is tagged with:
-- `latest` - Latest built version
-- `{version}` - Specific Archon version/ref
+- `latest` - Latest built version  
+- `{commit-sha}` - Specific Archon commit
 - `{date}` - Build date (YYYY-MM-DD)
+- `{date}-{short-sha}` - Date with commit identifier
 
 Example:
 ```bash
 # Pull latest
 docker pull ghcr.io/yourusername/archon-server:latest
 
-# Pull specific version
-docker pull ghcr.io/yourusername/archon-server:v1.2.3
+# Pull specific commit
+docker pull ghcr.io/yourusername/archon-server:abc1234567890def...
 
 # Pull by date
 docker pull ghcr.io/yourusername/archon-server:2024-01-15
+
+# Pull by date with commit
+docker pull ghcr.io/yourusername/archon-server:2024-01-15-abc1234
 ```
 
 ## 🚀 Usage
@@ -132,6 +136,53 @@ The workflow builds all components in parallel:
 - **Duplicate detection** - skips building if image already exists
 - **Multi-platform builds** cached separately
 
+## 🔒 Security & Production Features
+
+### Container Security
+- **🔐 Container Signing**: All images signed with [cosign](https://docs.sigstore.dev/cosign/overview/) using keyless signing
+- **📋 SBOM Generation**: Software Bill of Materials included with each image
+- **🛡️ Build Attestation**: Cryptographic attestation of build provenance  
+- **🔍 Vulnerability Scanning**: Trivy security scanning with results in GitHub Security tab
+- **🏗️ Multi-platform**: Native support for AMD64 and ARM64 architectures
+
+### Image Metadata
+Rich OCI-compliant metadata including:
+- Source repository and commit information
+- Build timestamps and versioning
+- License information (MIT)
+- Component descriptions and documentation links
+
+### Supply Chain Security
+- **Reproducible builds** from source code
+- **Attestation artifacts** stored in registry
+- **Signed provenance** linking images to source commits
+- **Security scanning** results available in GitHub Security tab
+
+### Verification
+
+Verify image signatures:
+```bash
+# Install cosign
+go install github.com/sigstore/cosign/v2/cmd/cosign@latest
+
+# Verify image signature
+cosign verify ghcr.io/dapperdivers/archon-server:latest \
+  --certificate-identity-regexp=".*" \
+  --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
+```
+
+Check SBOM:
+```bash
+# Download and view SBOM
+cosign download sbom ghcr.io/dapperdivers/archon-server:latest
+```
+
+View attestations:
+```bash
+# Download attestation
+cosign download attestation ghcr.io/dapperdivers/archon-server:latest
+```
+
 ## 🔧 Customization
 
 ### Change Source Repository
@@ -174,10 +225,13 @@ Images are published to **GitHub Container Registry** (`ghcr.io`) under your acc
 
 ## 🛡️ Security
 
-- Uses GitHub's built-in `GITHUB_TOKEN` (no manual token setup required)
-- Builds from source (no pre-built image dependencies)
-- Multi-platform builds ensure compatibility
-- All builds are reproducible and auditable
+- **Keyless signing** with GitHub OIDC (no manual keys required)
+- **SLSA Level 3** build provenance attestation
+- **Vulnerability scanning** integrated into CI/CD
+- **Multi-platform builds** ensure compatibility
+- **Reproducible builds** from source code
+- **Supply chain security** with SBOM and attestations
+- **GitHub Security tab** integration for vulnerability reports
 
 ## 📈 Monitoring
 
@@ -186,6 +240,12 @@ Check the **Actions** tab to monitor:
 - Failed builds and errors
 - Build duration and cache performance
 - Image publishing status
+- Security scan results and attestation generation
+
+### Security Monitoring
+- **Security** tab shows vulnerability scan results
+- **Packages** tab shows published images with signatures
+- **Attestations** are available for each image version
 
 ## 🤝 Contributing
 

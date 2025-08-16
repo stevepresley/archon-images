@@ -1,5 +1,12 @@
 name: Build and Push Archon Images
 
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+  attestations: write
+  id-token: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -9,7 +16,7 @@ on:
         default: 'main'
         type: string
   schedule:
-    # Check for new releases daily at 6 AM UTC
+    # Check for new commits to main daily at 6 AM UTC
     - cron: '0 6 * * *'
   push:
     branches:
@@ -23,23 +30,25 @@ env:
   UPSTREAM_REPO: coleam00/Archon
 
 jobs:
-  check-releases:
+  check-commits:
     runs-on: ubuntu-latest
     outputs:
-      latest_release: ${{ steps.check.outputs.latest_release }}
+      latest_commit: ${{ steps.check.outputs.latest_commit }}
       should_build: ${{ steps.check.outputs.should_build }}
       target_ref: ${{ steps.check.outputs.target_ref }}
     steps:
-      - name: Check latest release
+      - name: Check latest commit
         id: check
         run: |
-          # Get latest release from upstream
-          LATEST_RELEASE=$(gh api repos/${{ env.UPSTREAM_REPO }}/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+          # Get latest commit SHA from upstream main branch
+          LATEST_COMMIT=$(gh api repos/${{ env.UPSTREAM_REPO }}/commits/main --jq '.sha' 2>/dev/null || echo "")
           
-          # If no releases exist, use main branch
-          if [ -z "$LATEST_RELEASE" ]; then
-            LATEST_RELEASE="main"
-            echo "No releases found, using main branch"
+          # If we can't get the commit, use main branch
+          if [ -z "$LATEST_COMMIT" ]; then
+            LATEST_COMMIT="main"
+            echo "Could not get latest commit, using main branch"
+          else
+            echo "Latest commit on main: $LATEST_COMMIT"
           fi
           
           # Check if we have a manual input
@@ -48,29 +57,30 @@ jobs:
             SHOULD_BUILD="true"
             echo "Manual trigger with ref: $TARGET_REF"
           else
-            TARGET_REF="$LATEST_RELEASE"
+            TARGET_REF="$LATEST_COMMIT"
             
-            # Check if we already built this version
-            IMAGE_EXISTS=$(gh api /user/packages/container/archon-server/versions --paginate --jq '.[] | select(.metadata.container.tags[] | contains("'$LATEST_RELEASE'")) | .metadata.container.tags[]' 2>/dev/null | head -1 || echo "")
+            # Check if we already built this commit (use short SHA for tag)
+            SHORT_SHA=$(echo "$LATEST_COMMIT" | cut -c1-7)
+            IMAGE_EXISTS=$(gh api /user/packages/container/archon-server/versions --paginate --jq '.[] | select(.metadata.container.tags[] | contains("'$SHORT_SHA'")) | .metadata.container.tags[]' 2>/dev/null | head -1 || echo "")
             
             if [ -n "$IMAGE_EXISTS" ]; then
               SHOULD_BUILD="false"
-              echo "Image for $LATEST_RELEASE already exists: $IMAGE_EXISTS"
+              echo "Image for commit $SHORT_SHA already exists: $IMAGE_EXISTS"
             else
               SHOULD_BUILD="true"
-              echo "New release found: $LATEST_RELEASE"
+              echo "New commit found: $SHORT_SHA"
             fi
           fi
           
-          echo "latest_release=$LATEST_RELEASE" >> $GITHUB_OUTPUT
+          echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
           echo "should_build=$SHOULD_BUILD" >> $GITHUB_OUTPUT
           echo "target_ref=$TARGET_REF" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-images:
-    needs: check-releases
-    if: needs.check-releases.outputs.should_build == 'true'
+    needs: check-commits
+    if: needs.check-commits.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -92,11 +102,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.UPSTREAM_REPO }}
-          ref: ${{ needs.check-releases.outputs.target_ref }}
+          ref: ${{ needs.check-commits.outputs.target_ref }}
           path: archon-source
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.2.4'
 
       - name: Log in to Container Registry
         uses: docker/login-action@v3
@@ -112,10 +127,12 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/archon-${{ matrix.component.name }}
           tags: |
             type=raw,value=latest
-            type=raw,value=${{ needs.check-releases.outputs.target_ref }}
+            type=raw,value=${{ needs.check-commits.outputs.target_ref }}
             type=raw,value={{date 'YYYY-MM-DD'}}
+            type=sha,prefix={{date 'YYYY-MM-DD'}}-
 
       - name: Build and push image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ./archon-source/${{ matrix.component.context }}
@@ -126,3 +143,82 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
+          provenance: true
+          sbom: true
+          annotations: |
+            index:org.opencontainers.image.title=Archon ${{ matrix.component.name }}
+            index:org.opencontainers.image.description=Archon ${{ matrix.component.name }} service - AI-powered development environment
+            index:org.opencontainers.image.url=https://github.com/coleam00/Archon
+            index:org.opencontainers.image.source=https://github.com/${{ env.UPSTREAM_REPO }}
+            index:org.opencontainers.image.version=${{ needs.check-commits.outputs.target_ref }}
+            index:org.opencontainers.image.created=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            index:org.opencontainers.image.revision=${{ needs.check-commits.outputs.target_ref }}
+            index:org.opencontainers.image.licenses=MIT
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v1
+        if: github.event_name != 'pull_request'
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ github.repository_owner }}/archon-${{ matrix.component.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        if: github.event_name != 'pull_request'
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/archon-${{ matrix.component.name }}:latest
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.component.name }}.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: github.event_name != 'pull_request'
+        with:
+          sarif_file: 'trivy-results-${{ matrix.component.name }}.sarif'
+          category: 'trivy-${{ matrix.component.name }}'
+
+      - name: Sign container image with cosign
+        if: github.event_name != 'pull_request'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          echo "$TAGS" | while IFS= read -r tag; do
+            echo "Signing $tag@$DIGEST"
+            cosign sign --yes "$tag@$DIGEST"
+          done
+
+  build-summary:
+    needs: [check-commits, build-images]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate build summary
+        run: |
+          echo "## 🐳 Archon Docker Images Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Ref:** \`${{ needs.check-commits.outputs.target_ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Status:** ${{ needs.build-images.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.build-images.result }}" == "success" ]; then
+            echo "### ✅ Successfully Built Images" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Component | Image |" >> $GITHUB_STEP_SUMMARY
+            echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Server | \`ghcr.io/${{ github.repository_owner }}/archon-server:latest\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| MCP | \`ghcr.io/${{ github.repository_owner }}/archon-mcp:latest\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| Agents | \`ghcr.io/${{ github.repository_owner }}/archon-agents:latest\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| Frontend | \`ghcr.io/${{ github.repository_owner }}/archon-frontend:latest\` |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🔒 Security Features" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ SBOM (Software Bill of Materials) generated" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Build provenance attestation created" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Container images signed with cosign" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Vulnerability scanning with Trivy" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Multi-platform builds (amd64/arm64)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Build Failed" >> $GITHUB_STEP_SUMMARY
+            echo "Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+          fi
