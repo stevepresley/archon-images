@@ -12,98 +12,65 @@ on:
     inputs:
       archon_ref:
         description: 'Archon repository ref (tag, branch, or commit)'
-        required: false
+        required: true
         default: 'main'
         type: string
-  schedule:
-    # Check for new commits to main daily at 6 AM UTC
-    - cron: '0 6 * * *'
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/**'
-      - 'scripts/**'
+  workflow_call:
+    inputs:
+      archon_ref:
+        description: 'Archon repository ref (tag, branch, or commit)'
+        required: true
+        type: string
 
 env:
   REGISTRY: ghcr.io
   UPSTREAM_REPO: coleam00/Archon
 
 jobs:
-  check-commits:
-    runs-on: ubuntu-latest
-    outputs:
-      latest_commit: ${{ steps.check.outputs.latest_commit }}
-      should_build: ${{ steps.check.outputs.should_build }}
-      target_ref: ${{ steps.check.outputs.target_ref }}
-    steps:
-      - name: Check latest commit
-        id: check
-        run: |
-          # Get latest commit SHA from upstream main branch
-          LATEST_COMMIT=$(gh api repos/${{ env.UPSTREAM_REPO }}/commits/main --jq '.sha' 2>/dev/null || echo "")
-          
-          # If we can't get the commit, use main branch
-          if [ -z "$LATEST_COMMIT" ]; then
-            LATEST_COMMIT="main"
-            echo "Could not get latest commit, using main branch"
-          else
-            echo "Latest commit on main: $LATEST_COMMIT"
-          fi
-          
-          # Check if we have a manual input
-          if [ -n "${{ github.event.inputs.archon_ref }}" ]; then
-            TARGET_REF="${{ github.event.inputs.archon_ref }}"
-            SHOULD_BUILD="true"
-            echo "Manual trigger with ref: $TARGET_REF"
-          else
-            TARGET_REF="$LATEST_COMMIT"
-            
-            # Check if we already built this commit (use short SHA for tag)
-            SHORT_SHA=$(echo "$LATEST_COMMIT" | cut -c1-7)
-            IMAGE_EXISTS=$(gh api /user/packages/container/archon-server/versions --paginate --jq '.[] | select(.metadata.container.tags[] | contains("'$SHORT_SHA'")) | .metadata.container.tags[]' 2>/dev/null | head -1 || echo "")
-            
-            if [ -n "$IMAGE_EXISTS" ]; then
-              SHOULD_BUILD="false"
-              echo "Image for commit $SHORT_SHA already exists: $IMAGE_EXISTS"
-            else
-              SHOULD_BUILD="true"
-              echo "New commit found: $SHORT_SHA"
-            fi
-          fi
-          
-          echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
-          echo "should_build=$SHOULD_BUILD" >> $GITHUB_OUTPUT
-          echo "target_ref=$TARGET_REF" >> $GITHUB_OUTPUT
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   build-images:
-    needs: check-commits
-    if: needs.check-commits.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
         component:
           - name: server
-            dockerfile: python/Dockerfile.server
+            dockerfile: dockerfiles/server/Dockerfile
             context: python
+            upstream_context: python
           - name: mcp
-            dockerfile: python/Dockerfile.mcp
+            dockerfile: dockerfiles/mcp/Dockerfile
             context: python
+            upstream_context: python
           - name: agents
-            dockerfile: python/Dockerfile.agents
+            dockerfile: dockerfiles/agents/Dockerfile
             context: python
+            upstream_context: python
           - name: frontend
-            dockerfile: Dockerfile
+            dockerfile: dockerfiles/frontend/Dockerfile
             context: archon-ui-main
+            upstream_context: archon-ui-main
     steps:
+      - name: Checkout this repository (for custom Dockerfiles)
+        uses: actions/checkout@v4
+        with:
+          path: archon-images
+
       - name: Checkout upstream Archon repository
         uses: actions/checkout@v4
         with:
           repository: ${{ env.UPSTREAM_REPO }}
-          ref: ${{ needs.check-commits.outputs.target_ref }}
+          ref: ${{ inputs.archon_ref }}
           path: archon-source
+
+      - name: Copy custom Dockerfiles to build context
+        run: |
+          # Copy our enhanced Dockerfile to the appropriate location
+          cp archon-images/${{ matrix.component.dockerfile }} archon-source/${{ matrix.component.upstream_context }}/Dockerfile
+          
+          # Copy frontend entrypoint script if building frontend
+          if [ "${{ matrix.component.name }}" = "frontend" ]; then
+            cp archon-images/dockerfiles/frontend/entrypoint.sh archon-source/${{ matrix.component.upstream_context }}/entrypoint.sh
+            chmod +x archon-source/${{ matrix.component.upstream_context }}/entrypoint.sh
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -127,7 +94,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/archon-${{ matrix.component.name }}
           tags: |
             type=raw,value=latest
-            type=raw,value=${{ needs.check-commits.outputs.target_ref }}
+            type=raw,value=${{ inputs.archon_ref }}
             type=raw,value={{date 'YYYY-MM-DD'}}
             type=sha,prefix={{date 'YYYY-MM-DD'}}-
 
@@ -135,14 +102,14 @@ jobs:
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: ./archon-source/${{ matrix.component.context }}
-          file: ./archon-source/${{ matrix.component.dockerfile }}
+          context: ./archon-source/${{ matrix.component.upstream_context }}
+          file: ./archon-source/${{ matrix.component.upstream_context }}/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=build-${{ matrix.component.name }}
+          cache-to: type=gha,mode=max,scope=build-${{ matrix.component.name }}
+          platforms: linux/amd64  # AMD64 only for faster builds
           provenance: true
           sbom: true
           annotations: |
@@ -150,9 +117,9 @@ jobs:
             index:org.opencontainers.image.description=Archon ${{ matrix.component.name }} service - AI-powered development environment
             index:org.opencontainers.image.url=https://github.com/coleam00/Archon
             index:org.opencontainers.image.source=https://github.com/${{ env.UPSTREAM_REPO }}
-            index:org.opencontainers.image.version=${{ needs.check-commits.outputs.target_ref }}
+            index:org.opencontainers.image.version=${{ inputs.archon_ref }}
             index:org.opencontainers.image.created=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-            index:org.opencontainers.image.revision=${{ needs.check-commits.outputs.target_ref }}
+            index:org.opencontainers.image.revision=${{ inputs.archon_ref }}
             index:org.opencontainers.image.licenses=MIT
 
       - name: Generate artifact attestation
@@ -170,10 +137,44 @@ jobs:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/archon-${{ matrix.component.name }}:latest
           format: 'sarif'
           output: 'trivy-results-${{ matrix.component.name }}.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'  # Don't fail build on vulnerabilities, just report them
+          ignore-unfixed: true
+
+      # Container security benchmark - Only on server and only on releases/tags for speed
+      - name: Run container security benchmark
+        uses: aquasecurity/trivy-action@master
+        if: github.event_name != 'pull_request' && matrix.component.name == 'server' && startsWith(github.ref, 'refs/tags/')
+        continue-on-error: true
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/archon-${{ matrix.component.name }}:latest
+          format: 'table'
+          scan-type: 'config'
+          output: 'trivy-config-${{ matrix.component.name }}.txt'
+
+      # Enhanced SBOM - Only on releases/tags for speed  
+      - name: Run Syft for enhanced SBOM
+        uses: anchore/sbom-action@v0.17.2
+        if: github.event_name != 'pull_request' && (matrix.component.name == 'server' || matrix.component.name == 'frontend') && startsWith(github.ref, 'refs/tags/')
+        continue-on-error: true
+        with:
+          image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/archon-${{ matrix.component.name }}:latest
+          format: 'spdx-json'
+          output-file: 'sbom-${{ matrix.component.name }}.spdx.json'
+
+      - name: Upload enhanced SBOM
+        uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request' && (matrix.component.name == 'server' || matrix.component.name == 'frontend') && startsWith(github.ref, 'refs/tags/')
+        continue-on-error: true
+        with:
+          name: sbom-${{ matrix.component.name }}
+          path: 'sbom-${{ matrix.component.name }}.spdx.json'
+          if-no-files-found: warn
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: github.event_name != 'pull_request'
+        continue-on-error: true  # Don't fail build if SARIF upload has issues
         with:
           sarif_file: 'trivy-results-${{ matrix.component.name }}.sarif'
           category: 'trivy-${{ matrix.component.name }}'
@@ -190,7 +191,7 @@ jobs:
           done
 
   build-summary:
-    needs: [check-commits, build-images]
+    needs: [build-images]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -198,7 +199,7 @@ jobs:
         run: |
           echo "## 🐳 Archon Docker Images Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Target Ref:** \`${{ needs.check-commits.outputs.target_ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Ref:** \`${{ inputs.archon_ref }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Build Status:** ${{ needs.build-images.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           

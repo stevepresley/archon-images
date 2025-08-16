@@ -1,0 +1,109 @@
+# Pod Security Standards for Archon deployment
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: archon
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted  
+    pod-security.kubernetes.io/warn: restricted
+
+---
+# Network Policy to restrict ingress/egress traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: archon-network-policy
+  namespace: archon
+spec:
+  podSelector:
+    matchLabels:
+      app: archon
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from nginx-ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: nginx-ingress
+    ports:
+    - protocol: TCP
+      port: 5173
+  # Allow inter-service communication
+  - from:
+    - podSelector:
+        matchLabels:
+          app: archon
+    ports:
+    - protocol: TCP
+      port: 8181  # server
+    - protocol: TCP
+      port: 8051  # mcp
+    - protocol: TCP
+      port: 8052  # agents
+  egress:
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow HTTPS outbound (for API calls, package updates, etc.)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+  # Allow inter-service communication  
+  - to:
+    - podSelector:
+        matchLabels:
+          app: archon
+    ports:
+    - protocol: TCP
+      port: 8181
+    - protocol: TCP
+      port: 8051
+    - protocol: TCP
+      port: 8052
+    - protocol: TCP
+      port: 5173
+
+---
+# Security Context Constraints for enhanced security
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: archon-service-account
+  namespace: archon
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: archon-role
+  namespace: archon
+rules:
+# Minimal permissions - only what's needed
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: archon-role-binding
+  namespace: archon
+subjects:
+- kind: ServiceAccount
+  name: archon-service-account
+  namespace: archon
+roleRef:
+  kind: Role
+  name: archon-role
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,120 @@
+name: Check for Archon Updates
+
+permissions:
+  contents: read
+  packages: read
+  actions: write
+
+on:
+  schedule:
+    # Check for new commits to main daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      force_check:
+        description: 'Force check even if recently checked'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  UPSTREAM_REPO: coleam00/Archon
+
+jobs:
+  check-for-updates:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      target_ref: ${{ steps.check.outputs.target_ref }}
+      latest_commit: ${{ steps.check.outputs.latest_commit }}
+    steps:
+      - name: Check for new commits
+        id: check
+        run: |
+          echo "🔍 Checking for new commits in ${{ env.UPSTREAM_REPO }}"
+          
+          # Get latest commit SHA from upstream main branch
+          LATEST_COMMIT=$(gh api repos/${{ env.UPSTREAM_REPO }}/commits/main --jq '.sha' 2>/dev/null || echo "")
+          
+          if [ -z "$LATEST_COMMIT" ]; then
+            echo "❌ Could not fetch latest commit, using main branch"
+            LATEST_COMMIT="main"
+          else
+            echo "📍 Latest commit on main: $LATEST_COMMIT"
+          fi
+          
+          # Set target ref
+          TARGET_REF="$LATEST_COMMIT"
+          SHORT_SHA=$(echo "$LATEST_COMMIT" | cut -c1-7)
+          
+          # Check if we already built this commit
+          echo "🔍 Checking if commit $SHORT_SHA has already been built..."
+          
+          # First check if the package exists at all
+          PACKAGE_EXISTS=$(gh api /user/packages/container/archon-server 2>/dev/null && echo "EXISTS" || echo "NOT_EXISTS")
+          
+          if [ "$PACKAGE_EXISTS" = "NOT_EXISTS" ]; then
+            SHOULD_BUILD="true"
+            echo "✅ Package 'archon-server' doesn't exist yet - should build"
+          else
+            # Package exists, check if this specific commit was built
+            PACKAGE_CHECK=$(gh api /user/packages/container/archon-server/versions --paginate --jq '.[] | select(.metadata.container.tags[] | contains("'$SHORT_SHA'")) | .metadata.container.tags[]' 2>/dev/null || echo "")
+            
+            if [ -n "$PACKAGE_CHECK" ]; then
+              if [ "${{ github.event.inputs.force_check }}" = "true" ]; then
+                SHOULD_BUILD="true"
+                echo "🔄 Force check enabled - will build anyway"
+              else
+                SHOULD_BUILD="false"
+                echo "⏭️  Image for commit $SHORT_SHA already exists: $PACKAGE_CHECK"
+              fi
+            else
+              SHOULD_BUILD="true"
+              echo "✅ Commit $SHORT_SHA not found in existing package - should build"
+            fi
+          fi
+          
+          echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
+          echo "should_build=$SHOULD_BUILD" >> $GITHUB_OUTPUT
+          echo "target_ref=$TARGET_REF" >> $GITHUB_OUTPUT
+          
+          # Create job summary
+          echo "## 🔍 Archon Update Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Latest Commit:** \`$SHORT_SHA\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Should Build:** $SHOULD_BUILD" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$SHOULD_BUILD" = "true" ]; then
+            echo "### ✅ New Build Needed" >> $GITHUB_STEP_SUMMARY
+            echo "A new commit was detected that hasn't been built yet." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⏭️ No Build Needed" >> $GITHUB_STEP_SUMMARY
+            echo "Images for this commit already exist." >> $GITHUB_STEP_SUMMARY
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  trigger-build:
+    needs: check-for-updates
+    if: needs.check-for-updates.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger build workflow
+        run: |
+          echo "🚀 Triggering build workflow for commit ${{ needs.check-for-updates.outputs.latest_commit }}"
+          
+          gh workflow run build-images.yml \
+            --repo ${{ github.repository }} \
+            --field archon_ref="${{ needs.check-for-updates.outputs.target_ref }}"
+          
+          echo "✅ Build workflow triggered successfully"
+          
+          # Update job summary
+          echo "## 🚀 Build Triggered" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Build workflow has been triggered for commit \`$(echo "${{ needs.check-for-updates.outputs.latest_commit }}" | cut -c1-7)\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the [Actions tab](../../actions) to monitor the build progress." >> $GITHUB_STEP_SUMMARY
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

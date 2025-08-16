@@ -15,18 +15,31 @@ This repository automatically builds and publishes Docker images for [Archon](ht
 
 ## 🤖 Automation
 
-### Automatic Updates
-- **Daily checks** at 6 AM UTC for new commits to Archon main branch
-- **Smart rebuilding** - only builds if a new commit is detected
+### Two-Workflow System
+
+**1. Check for Updates** (`check-updates.yml`)
+- **Daily monitoring** at 6 AM UTC for new commits
+- **Smart detection** - only triggers builds for new commits
+- **Manual forcing** - option to force check/build
+- **Automatic triggering** of build workflow when needed
+
+**2. Build and Push Images** (`build-images.yml`) 
+- **Production builds** with security features
 - **Multi-platform** support (linux/amd64, linux/arm64)
-- **Efficient caching** to speed up builds
+- **Triggered automatically** by check workflow or manually
 
 ### Manual Triggers
-You can manually trigger builds for any ref (tag, branch, or commit):
 
-1. Go to **Actions** → **Build and Push Archon Images**
+**Force a check for updates:**
+1. Go to **Actions** → **Check for Archon Updates**
 2. Click **Run workflow**
-3. Enter the desired Archon ref (defaults to `main`)
+3. Check "Force check" if needed
+4. Click **Run workflow**
+
+**Build specific ref directly:**
+1. Go to **Actions** → **Build and Push Archon Images**  
+2. Click **Run workflow**
+3. Enter the desired Archon ref (commit, branch, or tag)
 4. Click **Run workflow**
 
 ## 🏷️ Image Tags
@@ -54,6 +67,8 @@ docker pull ghcr.io/yourusername/archon-server:2024-01-15-abc1234
 
 ## 🚀 Usage
 
+> **For Kubernetes deployments:** See [KUBERNETES.md](KUBERNETES.md) for comprehensive deployment guide addressing common issues like "Blocked request" errors, health check failures, and port configuration problems.
+
 ### Quick Start with Docker Compose
 
 ```yaml
@@ -79,7 +94,7 @@ services:
   archon-frontend:
     image: ghcr.io/yourusername/archon-frontend:latest
     ports:
-      - "3737:3737"
+      - "5173:5173"  # FIXED: Use 5173:5173, not 3737:5173
 ```
 
 ### Individual Services
@@ -94,8 +109,8 @@ docker run -p 8051:8051 ghcr.io/yourusername/archon-mcp:latest
 # Run agents service
 docker run -p 8052:8052 ghcr.io/yourusername/archon-agents:latest
 
-# Run frontend
-docker run -p 3737:3737 ghcr.io/yourusername/archon-frontend:latest
+# Run frontend - FIXED: Use consistent port mapping
+docker run -p 5173:5173 ghcr.io/yourusername/archon-frontend:latest
 ```
 
 ## ⚙️ Setup
@@ -125,16 +140,47 @@ Manually trigger the workflow to build your first set of images:
 - **Components**: All 4 microservices
 
 ### Build Matrix
-The workflow builds all components in parallel:
-- **Server**: Python FastAPI backend
-- **MCP**: Model Context Protocol service
-- **Agents**: AI agent hosting
-- **Frontend**: React + Vite application
+The build workflow processes all components in parallel with enhanced Kubernetes support:
+- **Server**: Python FastAPI backend with health endpoint and proper environment defaults
+- **MCP**: Model Context Protocol service with non-root user security
+- **Agents**: AI agent hosting with health checks and logging configuration
+- **Frontend**: React + Vite application with HOST variable support and health endpoint
+
+### Workflow Separation Benefits
+- **Cleaner logs** - check and build operations are separate
+- **Faster feedback** - know immediately if new commits exist
+- **Flexible triggering** - build specific refs without checking
+- **Better monitoring** - separate success/failure tracking
+- **Resource efficiency** - only build when needed
 
 ### Smart Caching
 - **GitHub Actions cache** for faster subsequent builds
-- **Duplicate detection** - skips building if image already exists
+- **Duplicate detection** - check workflow prevents unnecessary builds
 - **Multi-platform builds** cached separately
+
+## ✨ Kubernetes Enhancements
+
+This repository includes specialized Docker images with Kubernetes-specific improvements:
+
+### Frontend Enhancements
+- **HOST Variable Support**: Automatically configures Vite allowed hosts for custom domains
+- **Health Endpoint**: Dedicated `/health` endpoint for proper health checks
+- **Port Consistency**: Uses port 5173 throughout (no more 3737:5173 confusion)
+- **Non-root Security**: Runs as user 1001 for enhanced security
+
+### Backend Services
+- **Health Endpoints**: All services include `/health` endpoints where applicable
+- **Environment Defaults**: Proper `HOST=0.0.0.0` defaults for Kubernetes
+- **Security Context**: Non-root users (UID 1001) for all containers
+- **Logging**: Configurable `LOG_LEVEL` environment variable
+
+### Common Issues Resolved
+- ✅ **"Blocked request" errors** - Fixed with proper HOST configuration
+- ✅ **Health check failures** - Dedicated health endpoints and correct port mapping
+- ✅ **Port confusion** - Consistent 5173 port usage for frontend
+- ✅ **Security vulnerabilities** - Non-root containers with proper user contexts
+
+See [KUBERNETES.md](KUBERNETES.md) for complete deployment guide and troubleshooting.
 
 ## 🔒 Security & Production Features
 
@@ -246,6 +292,16 @@ Check the **Actions** tab to monitor:
 - **Security** tab shows vulnerability scan results
 - **Packages** tab shows published images with signatures
 - **Attestations** are available for each image version
+
+## 🧪 Testing
+
+For testing containers locally before deployment, see the [tests/](tests/) directory which includes:
+
+- `test-containers.sh` - Script to build and test all containers locally
+- `docker-compose.test.yml` - Docker Compose configuration for testing
+- `README.md` - Testing documentation and usage instructions
+
+The testing setup replicates the same build process used in CI/CD.
 
 ## 🤝 Contributing
 
