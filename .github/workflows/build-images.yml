@@ -1,0 +1,128 @@
+name: Build and Push Archon Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      archon_ref:
+        description: 'Archon repository ref (tag, branch, or commit)'
+        required: false
+        default: 'main'
+        type: string
+  schedule:
+    # Check for new releases daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/**'
+
+env:
+  REGISTRY: ghcr.io
+  UPSTREAM_REPO: coleam00/Archon
+
+jobs:
+  check-releases:
+    runs-on: ubuntu-latest
+    outputs:
+      latest_release: ${{ steps.check.outputs.latest_release }}
+      should_build: ${{ steps.check.outputs.should_build }}
+      target_ref: ${{ steps.check.outputs.target_ref }}
+    steps:
+      - name: Check latest release
+        id: check
+        run: |
+          # Get latest release from upstream
+          LATEST_RELEASE=$(gh api repos/${{ env.UPSTREAM_REPO }}/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+          
+          # If no releases exist, use main branch
+          if [ -z "$LATEST_RELEASE" ]; then
+            LATEST_RELEASE="main"
+            echo "No releases found, using main branch"
+          fi
+          
+          # Check if we have a manual input
+          if [ -n "${{ github.event.inputs.archon_ref }}" ]; then
+            TARGET_REF="${{ github.event.inputs.archon_ref }}"
+            SHOULD_BUILD="true"
+            echo "Manual trigger with ref: $TARGET_REF"
+          else
+            TARGET_REF="$LATEST_RELEASE"
+            
+            # Check if we already built this version
+            IMAGE_EXISTS=$(gh api /user/packages/container/archon-server/versions --paginate --jq '.[] | select(.metadata.container.tags[] | contains("'$LATEST_RELEASE'")) | .metadata.container.tags[]' 2>/dev/null | head -1 || echo "")
+            
+            if [ -n "$IMAGE_EXISTS" ]; then
+              SHOULD_BUILD="false"
+              echo "Image for $LATEST_RELEASE already exists: $IMAGE_EXISTS"
+            else
+              SHOULD_BUILD="true"
+              echo "New release found: $LATEST_RELEASE"
+            fi
+          fi
+          
+          echo "latest_release=$LATEST_RELEASE" >> $GITHUB_OUTPUT
+          echo "should_build=$SHOULD_BUILD" >> $GITHUB_OUTPUT
+          echo "target_ref=$TARGET_REF" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-images:
+    needs: check-releases
+    if: needs.check-releases.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component:
+          - name: server
+            dockerfile: python/Dockerfile.server
+            context: python
+          - name: mcp
+            dockerfile: python/Dockerfile.mcp
+            context: python
+          - name: agents
+            dockerfile: python/Dockerfile.agents
+            context: python
+          - name: frontend
+            dockerfile: Dockerfile
+            context: archon-ui-main
+    steps:
+      - name: Checkout upstream Archon repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ needs.check-releases.outputs.target_ref }}
+          path: archon-source
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/archon-${{ matrix.component.name }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ needs.check-releases.outputs.target_ref }}
+            type=raw,value={{date 'YYYY-MM-DD'}}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./archon-source/${{ matrix.component.context }}
+          file: ./archon-source/${{ matrix.component.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
