@@ -23,9 +23,6 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.mcp.txt .
 RUN pip install --no-cache-dir -r requirements.mcp.txt
 
-# Override MCP version to match pyproject.toml (fixes import error)
-RUN pip install --no-cache-dir --force-reinstall mcp==1.7.1
-
 # Copy application code
 COPY . .
 

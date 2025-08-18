@@ -8,13 +8,13 @@ ENV ARCHON_SERVER_PORT=8181
 ENV LOG_LEVEL=INFO
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONPATH=/app:/app/src:/root/.local/lib/python3.11/site-packages
+ENV PYTHONPATH=/app:/app/src
 
 WORKDIR /app
 
 # Copy and install requirements from local source
 COPY requirements.server.txt .
-RUN pip install --user --no-cache-dir -r requirements.server.txt
+RUN pip install --no-cache-dir -r requirements.server.txt
 
 # Install runtime dependencies for Playwright (minimal set)
 RUN apt-get update && apt-get install -y \
