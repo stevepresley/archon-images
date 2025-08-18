@@ -12,10 +12,9 @@ ENV PYTHONPATH=/app:/app/src:/root/.local/lib/python3.11/site-packages
 
 WORKDIR /app
 
-# Fetch latest requirements from upstream and install Python dependencies
-RUN curl -o requirements.txt https://raw.githubusercontent.com/coleam00/Archon/main/python/requirements.server.txt \
-    && pip install --user --no-cache-dir -r requirements.txt \
-    && rm requirements.txt
+# Copy and install requirements from local source
+COPY requirements.server.txt .
+RUN pip install --user --no-cache-dir -r requirements.server.txt
 
 # Install runtime dependencies for Playwright (minimal set)
 RUN apt-get update && apt-get install -y \

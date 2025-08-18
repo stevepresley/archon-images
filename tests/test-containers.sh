@@ -39,6 +39,19 @@ cleanup() {
 # Set trap for cleanup on exit
 trap cleanup EXIT
 
+# Check if source directory exists, if not run setup
+SOURCE_DIR="/tmp/archon-source"
+if [ ! -d "$SOURCE_DIR" ]; then
+    print_status "Source directory not found. Running setup first..."
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -f "$SCRIPT_DIR/setup-test-environment.sh" ]; then
+        "$SCRIPT_DIR/setup-test-environment.sh"
+    else
+        print_error "Setup script not found. Please run setup-test-environment.sh first"
+        exit 1
+    fi
+fi
+
 # Build all images
 print_status "Building Docker images..."
 docker compose -f docker-compose.test.yml build --no-cache
