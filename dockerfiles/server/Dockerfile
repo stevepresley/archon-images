@@ -47,17 +47,17 @@ RUN apt-get update && apt-get install -y \
 # Copy application code
 COPY . .
 
-# Install Playwright browsers as root first (system-wide installation)
-RUN python -m playwright install chromium
-
-# Create non-root user and set ownership
+# Create non-root user first
 RUN addgroup --gid 1001 archon && \
     adduser --disabled-password --gecos '' --uid 1001 --gid 1001 archon && \
     chown -R archon:archon /app
 
-# Switch to non-root user
+# Switch to non-root user and install Playwright browsers for this user
 USER 1001
 ENV HOME=/home/archon
+
+# Install Playwright browsers as the archon user so they're accessible at runtime
+RUN python -m playwright install chromium
 
 EXPOSE ${ARCHON_SERVER_PORT}
 

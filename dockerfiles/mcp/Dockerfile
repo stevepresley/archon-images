@@ -26,6 +26,15 @@ RUN pip install --no-cache-dir -r requirements.mcp.txt
 # Copy application code
 COPY . .
 
+# Rename mcp directory to mcp_service to avoid module name conflict
+RUN mv /app/src/mcp /app/src/mcp_service
+
+# Update import references in the renamed files
+RUN sed -i 's/src\.mcp\./src.mcp_service./g' /app/src/mcp_service/mcp_server.py && \
+    sed -i 's/src\/mcp\//src\/mcp_service\//g' /app/src/mcp_service/mcp_server.py && \
+    find /app/src/mcp_service -name "*.py" -exec sed -i 's/src\.mcp\./src.mcp_service./g' {} \; && \
+    find /app/src -name "*.py" -exec sed -i 's/src\.mcp\./src.mcp_service./g' {} \;
+
 # Create non-root user for security (works standalone + Kubernetes can override)
 RUN addgroup --gid 1001 archon && \
     adduser --disabled-password --gecos '' --uid 1001 --gid 1001 archon && \
@@ -39,4 +48,4 @@ EXPOSE ${ARCHON_MCP_PORT}
 # Health check disabled - use TCP checks in Kubernetes instead
 
 # Run the MCP service
-CMD ["python", "/app/src/mcp/mcp_server.py"]
+CMD ["python", "/app/src/mcp_service/mcp_server.py"]
