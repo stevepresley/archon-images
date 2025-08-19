@@ -69,9 +69,10 @@ COPY tests/ tests/
 RUN addgroup --gid 1001 archon && \
     adduser --disabled-password --gecos '' --uid 1001 --gid 1001 archon && \
     chown -R archon:archon /app && \
-    # Allow non-root user access to Playwright browsers
+    # Allow non-root user access to Playwright browsers and packages
     chmod -R 755 /root/.local && \
-    chmod -R 755 /root/.cache
+    chmod -R 755 /root/.cache && \
+    chmod 755 /root
 
 # Switch to non-root user for runtime
 USER 1001
