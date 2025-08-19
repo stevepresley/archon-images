@@ -4,13 +4,13 @@ services:
   frontend:
     image: ghcr.io/dapperdivers/archon-frontend:latest
     ports:
-      - "5173:5173"
+      - "${VITE_PORT}:${VITE_PORT}"
     environment:
-      - NODE_ENV=development
-      - HOST=0.0.0.0
-      - PORT=5173
+      - NODE_ENV=${NODE_ENV}
+      - HOST=${HOST}
+      - PORT=${VITE_PORT}
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5173/health.html || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:${VITE_PORT}/health.html || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -19,14 +19,14 @@ services:
   agents:
     image: ghcr.io/dapperdivers/archon-agents:latest
     ports:
-      - "8052:8052"
+      - "${ARCHON_AGENTS_PORT}:${ARCHON_AGENTS_PORT}"
     environment:
-      - HOST=0.0.0.0
-      - PORT=8052
-      - ARCHON_AGENTS_PORT=8052
-      - LOG_LEVEL=INFO
+      - HOST=${HOST}
+      - PORT=${ARCHON_AGENTS_PORT}
+      - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT}
+      - LOG_LEVEL=${LOG_LEVEL}
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8052/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:${ARCHON_AGENTS_PORT}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -35,15 +35,15 @@ services:
   server:
     image: ghcr.io/dapperdivers/archon-server:latest
     ports:
-      - "8181:8181"
+      - "${ARCHON_SERVER_PORT}:${ARCHON_SERVER_PORT}"
     environment:
-      - HOST=0.0.0.0
-      - PORT=8181
-      - ARCHON_SERVER_PORT=8181
-      - LOG_LEVEL=INFO
-      - SUPABASE_URL=https://localhost:54321
-      - SUPABASE_ANON_KEY=test_key
-      - SUPABASE_SERVICE_KEY=test_service_key
+      - HOST=${HOST}
+      - PORT=${ARCHON_SERVER_PORT}
+      - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8181/health || exit 1"]
       interval: 30s
@@ -54,12 +54,12 @@ services:
   mcp:
     image: ghcr.io/dapperdivers/archon-mcp:latest
     ports:
-      - "8051:8051"
+      - "${ARCHON_MCP_PORT}:${ARCHON_MCP_PORT}"
     environment:
-      - HOST=0.0.0.0
-      - PORT=8051
-      - ARCHON_MCP_PORT=8051
-      - LOG_LEVEL=INFO
+      - HOST=${HOST}
+      - PORT=${ARCHON_MCP_PORT}
+      - ARCHON_MCP_PORT=${ARCHON_MCP_PORT}
+      - LOG_LEVEL=${LOG_LEVEL}
     # Note: MCP service may not have a /health endpoint
     healthcheck:
       test: ["CMD-SHELL", "netstat -tuln | grep :8051 || exit 1"]

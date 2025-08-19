@@ -1,5 +1,23 @@
-# Fast single-stage server build with security hardening
+# Server Service - Web crawling and document processing microservice with security hardening
+
+# Build stage
+FROM python:3.11 AS builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install Python dependencies
+COPY requirements.server.txt .
+RUN pip install --user --no-cache-dir -r requirements.server.txt
+
+# Runtime stage
 FROM python:3.11-slim
+
+WORKDIR /app
 
 # Set proper environment defaults for Kubernetes  
 ENV HOST=0.0.0.0
@@ -8,13 +26,6 @@ ENV ARCHON_SERVER_PORT=8181
 ENV LOG_LEVEL=INFO
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONPATH=/app:/app/src
-
-WORKDIR /app
-
-# Copy and install requirements from local source
-COPY requirements.server.txt .
-RUN pip install --no-cache-dir -r requirements.server.txt
 
 # Install runtime dependencies for Playwright (minimal set)
 RUN apt-get update && apt-get install -y \
@@ -42,22 +53,30 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
+# Copy Python packages from builder
+COPY --from=builder /root/.local /root/.local
 
+# Install Playwright browsers (as root for reliability)
+ENV PATH=/root/.local/bin:$PATH
+RUN playwright install chromium
 
-# Copy application code
-COPY . .
+# Copy server code and tests (selective copying like upstream)
+COPY src/server/ src/server/
+COPY src/__init__.py src/
+COPY tests/ tests/
 
-# Create non-root user first
+# Create non-root user for runtime security
 RUN addgroup --gid 1001 archon && \
     adduser --disabled-password --gecos '' --uid 1001 --gid 1001 archon && \
-    chown -R archon:archon /app
+    chown -R archon:archon /app && \
+    # Allow non-root user access to Playwright browsers
+    chmod -R 755 /root/.local && \
+    chmod -R 755 /root/.cache
 
-# Switch to non-root user and install Playwright browsers for this user
+# Switch to non-root user for runtime
 USER 1001
 ENV HOME=/home/archon
-
-# Install Playwright browsers as the archon user so they're accessible at runtime
-RUN python -m playwright install chromium
+ENV PYTHONPATH="/app:/root/.local/lib/python3.11/site-packages:$PYTHONPATH"
 
 EXPOSE ${ARCHON_SERVER_PORT}
 
@@ -65,5 +84,5 @@ EXPOSE ${ARCHON_SERVER_PORT}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD python -c "import urllib.request, os; urllib.request.urlopen(f'http://localhost:{os.environ[\"ARCHON_SERVER_PORT\"]}/health').read()" || exit 1
 
-# Run the server with configurable port (matching original Archon structure)
-CMD sh -c "python -m uvicorn src.server.main:socket_app --host 0.0.0.0 --port ${ARCHON_SERVER_PORT} --workers 1"
+# Run the server with configurable port (using JSON array format for better signal handling)
+CMD ["sh", "-c", "python -m uvicorn src.server.main:socket_app --host 0.0.0.0 --port ${ARCHON_SERVER_PORT} --workers 1"]
