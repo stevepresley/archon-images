@@ -56,9 +56,12 @@ RUN apt-get update && apt-get install -y \
 # Copy Python packages from builder
 COPY --from=builder /root/.local /root/.local
 
-# Install Playwright browsers (as root for reliability)
+# Install Playwright browsers in shared location accessible to non-root user
 ENV PATH=/root/.local/bin:$PATH
-RUN playwright install chromium
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+RUN mkdir -p /opt/playwright-browsers && \
+    playwright install chromium && \
+    chmod -R 755 /opt/playwright-browsers
 
 # Copy server code and tests (selective copying like upstream)
 COPY src/server/ src/server/
@@ -68,7 +71,9 @@ COPY tests/ tests/
 # Create non-root user for runtime security
 RUN addgroup --gid 1001 archon && \
     adduser --disabled-password --gecos '' --uid 1001 --gid 1001 archon && \
-    chown -R archon:archon /app && \
+    # Create home directory structure
+    mkdir -p /home/archon/.cache && \
+    chown -R archon:archon /app /home/archon && \
     # Allow non-root user access to Python packages in /root/.local
     chmod -R 755 /root/.local && \
     chmod 755 /root
@@ -76,6 +81,7 @@ RUN addgroup --gid 1001 archon && \
 # Switch to non-root user for runtime
 USER 1001
 ENV HOME=/home/archon
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 ENV PYTHONPATH="/app:/root/.local/lib/python3.11/site-packages:$PYTHONPATH"
 
 EXPOSE ${ARCHON_SERVER_PORT}
