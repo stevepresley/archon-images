@@ -1,14 +1,5 @@
-# Fast single-stage MCP build with security hardening
+# MCP Service - Lightweight HTTP-based microservice  
 FROM python:3.11-slim
-
-# Set proper environment defaults for Kubernetes
-ENV HOST=0.0.0.0
-ENV PORT=8051
-ENV ARCHON_MCP_PORT=8051
-ENV LOG_LEVEL=INFO
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONPATH=/app:/app/src
 
 WORKDIR /app
 
@@ -19,33 +10,48 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Copy and install requirements from local source
+# Install dependencies
 COPY requirements.mcp.txt .
 RUN pip install --no-cache-dir -r requirements.mcp.txt
 
-# Copy application code
-COPY . .
+# Create minimal directory structure
+RUN mkdir -p src/mcp/modules src/server/services src/server/config
 
-# Rename mcp directory to mcp_service to avoid module name conflict
-RUN mv /app/src/mcp /app/src/mcp_service
+# Copy only MCP-specific files (lightweight protocol wrapper)
+COPY src/mcp/ src/mcp/
+COPY src/__init__.py src/
 
-# Update import references in the renamed files
-RUN sed -i 's/src\.mcp\./src.mcp_service./g' /app/src/mcp_service/mcp_server.py && \
-    sed -i 's/src\/mcp\//src\/mcp_service\//g' /app/src/mcp_service/mcp_server.py && \
-    find /app/src/mcp_service -name "*.py" -exec sed -i 's/src\.mcp\./src.mcp_service./g' {} \; && \
-    find /app/src -name "*.py" -exec sed -i 's/src\.mcp\./src.mcp_service./g' {} \;
+# Copy only the minimal server files MCP needs for HTTP communication
+COPY src/server/__init__.py src/server/
+COPY src/server/services/__init__.py src/server/services/
+COPY src/server/services/mcp_service_client.py src/server/services/
+COPY src/server/services/client_manager.py src/server/services/
+COPY src/server/services/mcp_session_manager.py src/server/services/
+COPY src/server/config/__init__.py src/server/config/
+COPY src/server/config/service_discovery.py src/server/config/
+COPY src/server/config/logfire_config.py src/server/config/
 
-# Create non-root user for security (works standalone + Kubernetes can override)
+# Create non-root user for security
 RUN addgroup --gid 1001 archon && \
     adduser --disabled-password --gecos '' --uid 1001 --gid 1001 archon && \
     chown -R archon:archon /app
 
 USER 1001
 
+# Set environment variables  
+ENV PYTHONPATH="/app"
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV HOST=0.0.0.0
+ENV PORT=8051
+ENV ARCHON_MCP_PORT=8051
+ENV LOG_LEVEL=INFO
+
+# Expose MCP port
 EXPOSE ${ARCHON_MCP_PORT}
 
 # Note: MCP service may not have a /health endpoint by default
 # Health check disabled - use TCP checks in Kubernetes instead
 
-# Run the MCP service
-CMD ["python", "/app/src/mcp_service/mcp_server.py"]
+# Run the MCP server using module syntax (avoids naming conflicts)
+CMD ["python", "-m", "src.mcp.mcp_server"]
