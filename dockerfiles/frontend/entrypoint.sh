@@ -65,115 +65,16 @@ if [ -n "${HOST:-}" ] && [ "$HOST" != "localhost" ] && [ "$HOST" != "0.0.0.0" ];
         echo "❌ Invalid HOST value, using default configuration" >&2
         HOST=""
     else
-        # Sanitize HOST for JavaScript context (escape quotes and backslashes)
-        SAFE_HOST=$(printf '%s\n' "$HOST" | sed 's/[\\"]/\\&/g')
+        # Simple approach: just add allowedHosts to the existing server config
+        echo "📝 Adding allowedHosts to vite.config.ts..."
         
-        # Check if vite.config.js exists and update it
-        if [ -f "vite.config.js" ]; then
-            echo "📝 Updating existing vite.config.js..."
-            # Create backup in /tmp with timestamp (avoid permission issues)
-            BACKUP_FILE="/tmp/vite.config.js.bak.$(date +%s)"
-            cp vite.config.js "$BACKUP_FILE" 2>/dev/null || echo "⚠️  Could not create backup file"
-            
-            # Use a more secure approach with temporary file
-            TEMP_CONFIG=$(mktemp)
-            
-            # Update the server configuration to include allowedHosts
-            node -e "
-            const fs = require('fs');
-            const path = 'vite.config.js';
-            let content = fs.readFileSync(path, 'utf8');
-            
-            // Sanitized HOST value
-            const safeHost = '$SAFE_HOST';
-            
-            // Add allowed hosts configuration
-            const hostConfig = \`
-  server: {
-    host: '0.0.0.0',
-    port: ${VITE_PORT:-5173},
-    allowedHosts: [
-      'localhost',
-      '127.0.0.1',
-      '\${safeHost}'
-    ]
-  },\`;
-            
-            // Replace existing server config or add if none exists
-            if (content.includes('server:')) {
-              content = content.replace(/server:\s*{[^}]*}/, hostConfig.trim());
-            } else {
-              // Add server config to the config object
-              content = content.replace('export default defineConfig({', \`export default defineConfig({\${hostConfig}\`);
-            }
-            
-            fs.writeFileSync('$TEMP_CONFIG', content);
-            console.log('✅ Generated secure vite.config.js');
-            " && mv "$TEMP_CONFIG" vite.config.js || {
-                echo "❌ Failed to update vite.config.js, using backup" >&2
-                cp "$BACKUP_FILE" vite.config.js 2>/dev/null || true
-                rm -f "$TEMP_CONFIG" 2>/dev/null || true
-            }
-            
-        elif [ -f "vite.config.ts" ]; then
-            echo "📝 Updating existing vite.config.ts..."
-            BACKUP_FILE_TS="/tmp/vite.config.ts.bak.$(date +%s)"
-            cp vite.config.ts "$BACKUP_FILE_TS" 2>/dev/null || echo "⚠️  Could not create backup file"
-            
-            TEMP_CONFIG=$(mktemp)
-            
-            # Similar update for TypeScript config
-            node -e "
-            const fs = require('fs');
-            const path = 'vite.config.ts';
-            let content = fs.readFileSync(path, 'utf8');
-            
-            const safeHost = '$SAFE_HOST';
-            
-            const hostConfig = \`
-  server: {
-    host: '0.0.0.0',
-    port: ${VITE_PORT:-5173},
-    allowedHosts: [
-      'localhost',
-      '127.0.0.1',
-      '\${safeHost}'
-    ]
-  },\`;
-            
-            if (content.includes('server:')) {
-              content = content.replace(/server:\s*{[^}]*}/s, hostConfig.trim());
-            } else {
-              content = content.replace('export default defineConfig({', \`export default defineConfig({\${hostConfig}\`);
-            }
-            
-            fs.writeFileSync('$TEMP_CONFIG', content);
-            console.log('✅ Generated secure vite.config.ts');
-            " && mv "$TEMP_CONFIG" vite.config.ts || {
-                echo "❌ Failed to update vite.config.ts, using backup" >&2
-                cp "$BACKUP_FILE_TS" vite.config.ts 2>/dev/null || true
-                rm -f "$TEMP_CONFIG" 2>/dev/null || true
-            }
-        else
-            echo "📝 Creating new vite.config.js with HOST configuration..."
-            # Create secure config file
-            cat > vite.config.js << EOF
-import { defineConfig } from 'vite'
-
-export default defineConfig({
-  server: {
-    host: '0.0.0.0',
-    port: ${VITE_PORT:-5173},
-    allowedHosts: [
-      'localhost',
-      '127.0.0.1',
-      '$SAFE_HOST'
-    ]
-  }
-})
-EOF
-            echo "✅ Created secure vite.config.js with custom HOST: $HOST"
-        fi
+        # Create backup
+        cp vite.config.ts vite.config.ts.bak 2>/dev/null || true
+        
+        # Use sed to add allowedHosts right after the port line in server config
+        sed -i "/port: 5173,/a\\      allowedHosts: ['localhost', '127.0.0.1', '$HOST']," vite.config.ts
+        
+        echo "✅ Added allowedHosts for: $HOST"
     fi
 else
     echo "ℹ️  Using default Vite configuration (HOST not set or is localhost/0.0.0.0)"
