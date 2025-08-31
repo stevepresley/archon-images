@@ -32,7 +32,8 @@ print_warning() {
 # Cleanup function
 cleanup() {
     print_status "Cleaning up containers and networks..."
-    docker compose -f docker-compose.test.yml down --remove-orphans 2>/dev/null || true
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    docker compose -f "$SCRIPT_DIR/docker-compose.test.yml" down --remove-orphans 2>/dev/null || true
     docker system prune -f 2>/dev/null || true
 }
 
@@ -54,7 +55,8 @@ fi
 
 # Build all images
 print_status "Building Docker images..."
-docker compose -f docker-compose.test.yml build --no-cache
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+docker compose -f "$SCRIPT_DIR/docker-compose.test.yml" build --no-cache
 
 if [ $? -eq 0 ]; then
     print_success "All images built successfully"
@@ -65,7 +67,7 @@ fi
 
 # Start containers
 print_status "Starting containers..."
-docker compose -f docker-compose.test.yml up -d
+docker compose -f "$SCRIPT_DIR/docker-compose.test.yml" up -d
 
 # Wait for containers to start
 print_status "Waiting for containers to start (30 seconds)..."
@@ -73,7 +75,7 @@ sleep 30
 
 # Check container status
 print_status "Checking container status..."
-docker compose -f docker-compose.test.yml ps
+docker compose -f "$SCRIPT_DIR/docker-compose.test.yml" ps
 
 # Test each service
 test_service() {
@@ -84,7 +86,7 @@ test_service() {
     print_status "Testing $service on port $port..."
     
     # Check if container is running
-    if ! docker compose -f docker-compose.test.yml ps $service | grep -q "Up"; then
+    if ! docker compose -f "$SCRIPT_DIR/docker-compose.test.yml" ps $service | grep -q "Up"; then
         print_error "$service container is not running"
         return 1
     fi
@@ -102,7 +104,7 @@ test_service() {
     
     # Show recent logs
     print_status "Recent logs for $service:"
-    docker compose -f docker-compose.test.yml logs --tail=10 $service
+    docker compose -f "$SCRIPT_DIR/docker-compose.test.yml" logs --tail=10 $service
 }
 
 # Test all services
@@ -113,13 +115,13 @@ test_service "mcp" "8051" ""
 
 # Show overall health
 print_status "Health check status:"
-docker compose -f docker-compose.test.yml ps
+docker compose -f "$SCRIPT_DIR/docker-compose.test.yml" ps
 
 # Check for any error logs
 print_status "Checking for error logs..."
 error_count=0
 for service in frontend agents server mcp; do
-    if docker compose -f docker-compose.test.yml logs $service | grep -i "error\|exception\|failed" | grep -v "test"; then
+    if docker compose -f "$SCRIPT_DIR/docker-compose.test.yml" logs $service | grep -i "error\|exception\|failed" | grep -v "test"; then
         print_error "Found errors in $service logs"
         ((error_count++))
     fi
@@ -133,7 +135,7 @@ fi
 
 print_status "Test complete. Containers will be cleaned up automatically."
 print_status "If you want to keep containers running, press Ctrl+C now and run:"
-print_status "  docker compose -f docker-compose.test.yml down"
+print_status "  docker compose -f $SCRIPT_DIR/docker-compose.test.yml down"
 
 # Keep running for a bit to allow manual inspection
 sleep 10
