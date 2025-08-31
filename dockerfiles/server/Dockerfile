@@ -61,8 +61,7 @@ ENV PATH=/root/.local/bin:$PATH
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 ENV PYTHONPATH="/root/.local/lib/python3.12/site-packages"
 RUN mkdir -p /opt/playwright-browsers && \
-    python -m playwright install-deps chromium && \
-    python -m playwright install chromium && \
+    playwright install chromium && \
     chmod -R 755 /opt/playwright-browsers
 
 # Copy server code and tests (selective copying like upstream)
