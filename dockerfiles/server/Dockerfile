@@ -59,8 +59,9 @@ COPY --from=builder /root/.local /root/.local
 # Install Playwright browsers in shared location accessible to non-root user
 ENV PATH=/root/.local/bin:$PATH
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+ENV PYTHONPATH="/root/.local/lib/python3.12/site-packages"
 RUN mkdir -p /opt/playwright-browsers && \
-    PYTHONPATH=/root/.local/lib/python3.12/site-packages playwright install chromium && \
+    python -m playwright install chromium && \
     chmod -R 755 /opt/playwright-browsers
 
 # Copy server code and tests (selective copying like upstream)
