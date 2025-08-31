@@ -60,7 +60,7 @@ COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 RUN mkdir -p /opt/playwright-browsers && \
-    playwright install chromium && \
+    PYTHONPATH=/root/.local/lib/python3.12/site-packages playwright install chromium && \
     chmod -R 755 /opt/playwright-browsers
 
 # Copy server code and tests (selective copying like upstream)
@@ -82,7 +82,7 @@ RUN addgroup --gid 1001 archon && \
 USER 1001
 ENV HOME=/home/archon
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
-ENV PYTHONPATH="/app:/root/.local/lib/python3.11/site-packages:$PYTHONPATH"
+ENV PYTHONPATH="/app:/root/.local/lib/python3.12/site-packages:$PYTHONPATH"
 
 EXPOSE ${ARCHON_SERVER_PORT}
 
