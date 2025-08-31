@@ -60,8 +60,9 @@ COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 ENV PYTHONPATH="/root/.local/lib/python3.12/site-packages"
-# Skip browser installation during build - will install at runtime if needed
 RUN mkdir -p /opt/playwright-browsers && \
+    python -m playwright install-deps chromium && \
+    python -m playwright install chromium && \
     chmod -R 755 /opt/playwright-browsers
 
 # Copy server code and tests (selective copying like upstream)
