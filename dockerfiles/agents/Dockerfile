@@ -20,8 +20,8 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 # Copy and install requirements from local source
-COPY requirements.agents.txt .
-RUN pip install --no-cache-dir -r requirements.agents.txt
+COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir -e .
 
 # Copy application code
 COPY . .
