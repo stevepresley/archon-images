@@ -24,7 +24,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  UPSTREAM_REPO: coleam00/Archon
+  #  UPSTREAM_REPO: coleam00/Archon
+  UPSTREAM_REPO: stevepresley/archon_beta
 
 jobs:
   build-images:
