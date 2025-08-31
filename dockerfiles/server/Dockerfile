@@ -11,8 +11,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies
-COPY requirements.server.txt .
-RUN pip install --user --no-cache-dir -r requirements.server.txt
+COPY pyproject.toml uv.lock ./
+RUN pip install --user --no-cache-dir -e .
 
 # Runtime stage
 FROM python:3.11-slim
