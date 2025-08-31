@@ -1,7 +1,7 @@
 # Server Service - Web crawling and document processing microservice with security hardening
 
 # Build stage
-FROM python:3.11 AS builder
+FROM python:3.12 AS builder
 
 WORKDIR /build
 
@@ -15,7 +15,7 @@ COPY requirements.server.txt .
 RUN pip install --user --no-cache-dir -r requirements.server.txt
 
 # Runtime stage
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 

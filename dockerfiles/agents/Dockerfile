@@ -1,5 +1,5 @@
 # Fast single-stage agents build with security hardening
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Set proper environment defaults for Kubernetes
 ENV HOST=0.0.0.0
