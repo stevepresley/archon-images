@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 
 # Copy and install Python dependencies
 COPY pyproject.toml uv.lock ./
-RUN pip install --user --no-cache-dir -e .
+RUN pip install --user --no-cache-dir -e ".[server]"
 
 # Runtime stage
 FROM python:3.12-slim
