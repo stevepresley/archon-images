@@ -86,11 +86,18 @@ services:
     image: ghcr.io/yourusername/archon-mcp:latest
     ports:
       - "8051:8051"
+    environment:
+      - ARCHON_MCP_PORT=8051 
+      - ARCHON_SERVER_PORT=8181
+      - ARCHON_AGENTS_PORT=8052
+      - VITE_PORT=5173
       
   archon-agents:
     image: ghcr.io/yourusername/archon-agents:latest
     ports:
       - "8052:8052"
+    environment:
+      - ARCHON_AGENTS_PORT=8052
       
   archon-frontend:
     image: ghcr.io/yourusername/archon-frontend:latest
@@ -112,10 +119,10 @@ services:
 docker run -p 8181:8181 ghcr.io/yourusername/archon-server:latest
 
 # Run MCP service
-docker run -p 8051:8051 ghcr.io/yourusername/archon-mcp:latest
+docker run -p 8051:8051 -e ARCHON_MCP_PORT=8051 -e ARCHON_SERVER_PORT=8181 -e ARCHON_AGENTS_PORT=8052 -e VITE_PORT=5173 ghcr.io/yourusername/archon-mcp:latest
 
 # Run agents service
-docker run -p 8052:8052 ghcr.io/yourusername/archon-agents:latest
+docker run -p 8052:8052 -e ARCHON_AGENTS_PORT=8052 ghcr.io/yourusername/archon-agents:latest
 
 # Run frontend - FIXED: Use consistent port mapping
 docker run -p 5173:5173 ghcr.io/yourusername/archon-frontend:latest

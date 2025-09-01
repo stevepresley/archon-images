@@ -12,10 +12,13 @@ RUN apt-get update && apt-get install -y \
 
 # Copy and install Python dependencies
 COPY pyproject.toml uv.lock ./
-RUN pip install --user --no-cache-dir -e ".[server]"
+RUN pip install --upgrade pip && pip install --user --no-cache-dir -e . --group server
 
 # Runtime stage
 FROM python:3.12-slim
+
+# Re-declare ARG for runtime stage
+ARG BUILD_VERSION="2025-09-01T13:00:00Z-remove-manual-playwright"
 
 WORKDIR /app
 
@@ -56,11 +59,13 @@ RUN apt-get update && apt-get install -y \
 # Copy Python packages from builder
 COPY --from=builder /root/.local /root/.local
 
-# Ensure playwright is available and install browsers
+# Ensure playwright browsers are available  
 ENV PATH=/root/.local/bin:$PATH
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 ENV PYTHONPATH="/root/.local/lib/python3.12/site-packages"
-RUN mkdir -p /opt/playwright-browsers && \
+# Install playwright browsers (playwright itself comes from crawl4ai dependency)
+RUN echo "=== BUILD VERSION: ${BUILD_VERSION} ===" && \
+    mkdir -p /opt/playwright-browsers && \
     python -m playwright install chromium && \
     chmod -R 755 /opt/playwright-browsers
 

@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y \
 
 # Copy and install requirements from local source
 COPY pyproject.toml uv.lock ./
-RUN pip install --no-cache-dir -e ".[agents,server]"
+RUN pip install --upgrade pip && pip install --no-cache-dir -e . --group agents --group server
 
 # Copy application code
 COPY . .
