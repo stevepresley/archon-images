@@ -19,8 +19,7 @@ on:
 
 env:  
   UPSTREAM_REPO: coleam00/Archon
-  #UPSTREAM_REPO: stevepresley/archon_beta
-
+  
 jobs:
   check-for-updates:
     runs-on: ubuntu-latest
