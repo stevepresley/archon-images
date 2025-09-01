@@ -1,10 +1,8 @@
-version: '3.8'
-
 services:
   agents:
     build:
       context: /tmp/archon-source/python
-      dockerfile: /home/derek/projects/archon-images/dockerfiles/agents/Dockerfile
+      dockerfile: /Volumes/Storage/Projects/archon-images/dockerfiles/agents/Dockerfile
     image: archon-agents:test
     environment:
       - ARCHON_AGENTS_PORT=8052
@@ -24,7 +22,7 @@ services:
   archon-server:
     build:
       context: /tmp/archon-source/python
-      dockerfile: /home/derek/projects/archon-images/dockerfiles/server/Dockerfile
+      dockerfile: /Volumes/Storage/Projects/archon-images/dockerfiles/server/Dockerfile
     image: archon-server:test
     environment:
       - ARCHON_SERVER_PORT=8181
@@ -44,7 +42,7 @@ services:
   mcp:
     build:
       context: /tmp/archon-source/python
-      dockerfile: /home/derek/projects/archon-images/dockerfiles/mcp/Dockerfile
+      dockerfile: /Volumes/Storage/Projects/archon-images/dockerfiles/mcp/Dockerfile
     image: archon-mcp:test
     environment:
       - ARCHON_MCP_PORT=8051
@@ -56,7 +54,7 @@ services:
   frontend:
     build:
       context: /tmp/archon-source/archon-ui-main
-      dockerfile: /home/derek/projects/archon-images/dockerfiles/frontend/Dockerfile
+      dockerfile: /Volumes/Storage/Projects/archon-images/dockerfiles/frontend/Dockerfile
     image: archon-frontend:test
     environment:
       - VITE_PORT=5173
