@@ -61,7 +61,6 @@ ENV PATH=/root/.local/bin:$PATH
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 ENV PYTHONPATH="/root/.local/lib/python3.12/site-packages"
 RUN mkdir -p /opt/playwright-browsers && \
-    pip install playwright && \
     python -m playwright install chromium && \
     chmod -R 755 /opt/playwright-browsers
 
