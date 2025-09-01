@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 
 # Install dependencies
 COPY pyproject.toml uv.lock ./
-RUN pip install --no-cache-dir -e ".[mcp]"
+RUN pip install --no-cache-dir -e ".[mcp,server]"
 
 # Create minimal directory structure
 RUN mkdir -p src/mcp_server/modules src/server/services src/server/config
