@@ -112,6 +112,7 @@ test_service "frontend" "5173" "/health.html"
 test_service "agents" "8052" "/health"
 test_service "server" "8181" "/health"
 test_service "mcp" "8051" ""
+test_service "docs" "3838" "/"
 
 # Show overall health
 print_status "Health check status:"
@@ -120,7 +121,7 @@ docker compose -f "$SCRIPT_DIR/docker-compose.test.yml" ps
 # Check for any error logs
 print_status "Checking for error logs..."
 error_count=0
-for service in frontend agents server mcp; do
+for service in frontend agents server mcp docs; do
     if docker compose -f "$SCRIPT_DIR/docker-compose.test.yml" logs $service | grep -i "error\|exception\|failed" | grep -v "test"; then
         print_error "Found errors in $service logs"
         ((error_count++))
