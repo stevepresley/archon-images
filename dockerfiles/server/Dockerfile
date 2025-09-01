@@ -1,7 +1,7 @@
 # Server Service - Web crawling and document processing microservice with security hardening
 
 # Build stage
-FROM python:3.11 AS builder
+FROM python:3.12 AS builder
 
 WORKDIR /build
 
@@ -11,11 +11,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies
-COPY requirements.server.txt .
-RUN pip install --user --no-cache-dir -r requirements.server.txt
+COPY pyproject.toml uv.lock ./
+RUN pip install --user --no-cache-dir -e .
 
 # Runtime stage
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -56,11 +56,13 @@ RUN apt-get update && apt-get install -y \
 # Copy Python packages from builder
 COPY --from=builder /root/.local /root/.local
 
-# Install Playwright browsers in shared location accessible to non-root user
+# Ensure playwright is available and install browsers
 ENV PATH=/root/.local/bin:$PATH
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+ENV PYTHONPATH="/root/.local/lib/python3.12/site-packages"
 RUN mkdir -p /opt/playwright-browsers && \
-    playwright install chromium && \
+    pip install playwright && \
+    python -m playwright install chromium && \
     chmod -R 755 /opt/playwright-browsers
 
 # Copy server code and tests (selective copying like upstream)
@@ -82,7 +84,7 @@ RUN addgroup --gid 1001 archon && \
 USER 1001
 ENV HOME=/home/archon
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
-ENV PYTHONPATH="/app:/root/.local/lib/python3.11/site-packages:$PYTHONPATH"
+ENV PYTHONPATH="/app:/root/.local/lib/python3.12/site-packages:$PYTHONPATH"
 
 EXPOSE ${ARCHON_SERVER_PORT}
 
