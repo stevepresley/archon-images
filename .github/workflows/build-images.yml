@@ -48,6 +48,10 @@ jobs:
             dockerfile: dockerfiles/frontend/Dockerfile
             context: archon-ui-main
             upstream_context: archon-ui-main
+          - name: docs
+            dockerfile: dockerfiles/docs/Dockerfile
+            context: docs
+            upstream_context: docs
     steps:
       - name: Checkout this repository (for custom Dockerfiles)
         uses: actions/checkout@v4
@@ -212,6 +216,7 @@ jobs:
             echo "| MCP | \`ghcr.io/${{ github.repository_owner }}/archon-mcp:latest\` |" >> $GITHUB_STEP_SUMMARY
             echo "| Agents | \`ghcr.io/${{ github.repository_owner }}/archon-agents:latest\` |" >> $GITHUB_STEP_SUMMARY
             echo "| Frontend | \`ghcr.io/${{ github.repository_owner }}/archon-frontend:latest\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| Docs | \`ghcr.io/${{ github.repository_owner }}/archon-docs:latest\` |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### 🔒 Security Features" >> $GITHUB_STEP_SUMMARY
             echo "- ✅ SBOM (Software Bill of Materials) generated" >> $GITHUB_STEP_SUMMARY

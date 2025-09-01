@@ -10,6 +10,7 @@ This repository automatically builds and publishes Docker images for [Archon](ht
 | **MCP** | Model Context Protocol interface | `ghcr.io/yourusername/archon-mcp` |
 | **Agents** | AI agent hosting service | `ghcr.io/yourusername/archon-agents` |
 | **Frontend** | React + Vite UI | `ghcr.io/yourusername/archon-frontend` |
+| **Docs** | Docusaurus documentation site | `ghcr.io/yourusername/archon-docs` |
 
 > Replace `yourusername` with your GitHub username
 
@@ -95,6 +96,13 @@ services:
     image: ghcr.io/yourusername/archon-frontend:latest
     ports:
       - "5173:5173"  # FIXED: Use 5173:5173, not 3737:5173
+      
+  archon-docs:
+    image: ghcr.io/yourusername/archon-docs:latest
+    ports:
+      - "3838:80"
+    environment:
+      - ARCHON_DOCS_PORT=3838
 ```
 
 ### Individual Services
@@ -111,6 +119,9 @@ docker run -p 8052:8052 ghcr.io/yourusername/archon-agents:latest
 
 # Run frontend - FIXED: Use consistent port mapping
 docker run -p 5173:5173 ghcr.io/yourusername/archon-frontend:latest
+
+# Run docs service
+docker run -p 3838:80 -e ARCHON_DOCS_PORT=3838 ghcr.io/yourusername/archon-docs:latest
 ```
 
 ## ⚙️ Setup
@@ -137,7 +148,7 @@ Manually trigger the workflow to build your first set of images:
 ### Source Repository
 - **Upstream**: `coleam00/Archon`
 - **Method**: Builds from source (not copying existing images)
-- **Components**: All 4 microservices
+- **Components**: All 5 microservices
 
 ### Build Matrix
 The build workflow processes all components in parallel with enhanced Kubernetes support:
@@ -145,6 +156,7 @@ The build workflow processes all components in parallel with enhanced Kubernetes
 - **MCP**: Model Context Protocol service with non-root user security
 - **Agents**: AI agent hosting with health checks and logging configuration
 - **Frontend**: React + Vite application with HOST variable support and health endpoint
+- **Docs**: Docusaurus documentation site served with nginx and non-root security
 
 ### Workflow Separation Benefits
 - **Cleaner logs** - check and build operations are separate
