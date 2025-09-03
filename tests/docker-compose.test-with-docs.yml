@@ -68,3 +68,20 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
+
+  docs:
+    build:
+      context: /tmp/archon-source/docs
+      dockerfile: Dockerfile
+    image: archon-docs:test
+    environment:
+      - ARCHON_DOCS_PORT=3838
+      - HOST=0.0.0.0
+    ports:
+      - "3838:80"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

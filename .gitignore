@@ -5,6 +5,6 @@ logs/
 
 # Claude
 .claude/
-CLAUDE.md
+claude.local.md
 .mcp.json
 .next-session.md

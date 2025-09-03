@@ -4,6 +4,7 @@
 set -euo pipefail
 
 echo "🧪 Testing Archon Docker containers locally..."
+echo "📅 Test started at: $(date)"
 
 # Colors for output
 RED='\033[0;31m'
@@ -40,11 +41,19 @@ cleanup() {
 # Set trap for cleanup on exit
 trap cleanup EXIT
 
-# Check if source directory exists, if not run setup
+# Check if source directory and custom files exist/are current, if not run setup
 SOURCE_DIR="/tmp/archon-source"
-if [ ! -d "$SOURCE_DIR" ]; then
-    print_status "Source directory not found. Running setup first..."
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Check if we need to run setup (missing source or any outdated dockerfiles)
+if [ ! -d "$SOURCE_DIR" ] || \
+   ! cmp -s "$PROJECT_ROOT/dockerfiles/server/Dockerfile" "$SOURCE_DIR/python/Dockerfile.server" 2>/dev/null || \
+   ! cmp -s "$PROJECT_ROOT/dockerfiles/agents/Dockerfile" "$SOURCE_DIR/python/Dockerfile.agents" 2>/dev/null || \
+   ! cmp -s "$PROJECT_ROOT/dockerfiles/mcp/Dockerfile" "$SOURCE_DIR/python/Dockerfile.mcp" 2>/dev/null || \
+   ! cmp -s "$PROJECT_ROOT/dockerfiles/frontend/Dockerfile" "$SOURCE_DIR/archon-ui-main/Dockerfile" 2>/dev/null || \
+   [ ! -f "$SOURCE_DIR/archon-ui-main/entrypoint.sh" ]; then
+    print_status "Source directory or custom files missing/outdated. Running setup first..."
     if [ -f "$SCRIPT_DIR/setup-test-environment.sh" ]; then
         "$SCRIPT_DIR/setup-test-environment.sh"
     else
@@ -112,7 +121,6 @@ test_service "frontend" "5173" "/health.html"
 test_service "agents" "8052" "/health"
 test_service "server" "8181" "/health"
 test_service "mcp" "8051" ""
-test_service "docs" "3838" "/"
 
 # Show overall health
 print_status "Health check status:"
@@ -121,7 +129,7 @@ docker compose -f "$SCRIPT_DIR/docker-compose.test.yml" ps
 # Check for any error logs
 print_status "Checking for error logs..."
 error_count=0
-for service in frontend agents server mcp docs; do
+for service in frontend agents server mcp; do
     if docker compose -f "$SCRIPT_DIR/docker-compose.test.yml" logs $service | grep -i "error\|exception\|failed" | grep -v "test"; then
         print_error "Found errors in $service logs"
         ((error_count++))

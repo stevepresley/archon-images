@@ -38,19 +38,17 @@ print_status "Repository: $UPSTREAM_REPO"
 print_status "Reference: $ARCHON_REF"
 print_status "Target directory: $SOURCE_DIR"
 
-# Clean up existing source if it exists
-if [ -d "$SOURCE_DIR" ]; then
-    print_status "Removing existing source directory..."
-    rm -rf "$SOURCE_DIR"
-fi
-
-# Clone the Archon repository
-print_status "Cloning Archon repository..."
-if git clone --branch "$ARCHON_REF" --depth 1 "$UPSTREAM_REPO" "$SOURCE_DIR"; then
-    print_success "Successfully cloned Archon repository"
+# Only clone if source directory doesn't exist
+if [ ! -d "$SOURCE_DIR" ]; then
+    print_status "Cloning Archon repository..."
+    if git clone --branch "$ARCHON_REF" --depth 1 "$UPSTREAM_REPO" "$SOURCE_DIR"; then
+        print_success "Successfully cloned Archon repository"
+    else
+        print_error "Failed to clone Archon repository"
+        exit 1
+    fi
 else
-    print_error "Failed to clone Archon repository"
-    exit 1
+    print_status "Using existing source directory..."
 fi
 
 # Verify expected directories exist
@@ -83,6 +81,36 @@ ls -la "$SOURCE_DIR/python" | head -10
 
 print_status "Frontend directory contents:"
 ls -la "$SOURCE_DIR/archon-ui-main" | head -10
+
+# Copy custom Dockerfiles to build contexts (matching GitHub workflow exactly)
+print_status "Copying custom Dockerfiles to build contexts..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Copy our enhanced Dockerfile to the appropriate location (exactly like GitHub)
+cp "$PROJECT_ROOT/dockerfiles/server/Dockerfile" "$SOURCE_DIR/python/Dockerfile.server"
+cp "$PROJECT_ROOT/dockerfiles/agents/Dockerfile" "$SOURCE_DIR/python/Dockerfile.agents"  
+cp "$PROJECT_ROOT/dockerfiles/mcp/Dockerfile" "$SOURCE_DIR/python/Dockerfile.mcp"
+cp "$PROJECT_ROOT/dockerfiles/frontend/Dockerfile" "$SOURCE_DIR/archon-ui-main/Dockerfile"
+print_success "Copied all custom Dockerfiles to build contexts"
+
+# Copy frontend entrypoint script (exactly like GitHub)
+cp "$PROJECT_ROOT/dockerfiles/frontend/entrypoint.sh" "$SOURCE_DIR/archon-ui-main/entrypoint.sh"
+chmod +x "$SOURCE_DIR/archon-ui-main/entrypoint.sh"
+print_success "Copied frontend entrypoint.sh"
+
+# Copy docs Dockerfile if docs directory exists
+if [ -d "$SOURCE_DIR/docs" ]; then
+    cp "$PROJECT_ROOT/dockerfiles/docs/Dockerfile" "$SOURCE_DIR/docs/Dockerfile"
+    # Fix logo file extension mismatch (docs expect .png but file is .svg)
+    if [ -f "$SOURCE_DIR/docs/static/img/logo-neon.svg" ]; then
+        cp "$SOURCE_DIR/docs/static/img/logo-neon.svg" "$SOURCE_DIR/docs/static/img/logo-neon.png"
+        print_success "Fixed logo-neon.png file extension issue"
+    fi
+    print_success "Copied docs Dockerfile"
+else
+    print_warning "Docs directory not found - skipping docs Dockerfile"
+fi
 
 print_success "Test environment setup complete!"
 print_status "You can now run: ./test-containers.sh"
