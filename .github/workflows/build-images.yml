@@ -24,7 +24,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  UPSTREAM_REPO: coleam00/Archon
+  UPSTREAM_REPO: stevepresley/archon_beta
   
 jobs:
   build-images:
@@ -120,7 +120,7 @@ jobs:
           annotations: |
             index:org.opencontainers.image.title=Archon ${{ matrix.component.name }}
             index:org.opencontainers.image.description=Archon ${{ matrix.component.name }} service - AI-powered development environment
-            index:org.opencontainers.image.url=https://github.com/coleam00/Archon
+            index:org.opencontainers.image.url=https://github.com/stevepresley/archon_beta
             index:org.opencontainers.image.source=https://github.com/${{ env.UPSTREAM_REPO }}
             index:org.opencontainers.image.version=${{ inputs.archon_ref }}
             index:org.opencontainers.image.created=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}

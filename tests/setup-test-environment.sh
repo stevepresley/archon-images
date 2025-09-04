@@ -29,7 +29,7 @@ print_warning() {
 }
 
 # Configuration
-UPSTREAM_REPO="https://github.com/coleam00/Archon.git"
+UPSTREAM_REPO="https://github.com/stevepresley/archon_beta.git"
 ARCHON_REF="${1:-main}"  # Use provided ref or default to main
 SOURCE_DIR="/tmp/archon-source"
 
