@@ -1,2 +1,9 @@
 logs/
+
+# Environment variables
 .env
+
+# Claude
+.claude/
+CLAUDE.md
+
