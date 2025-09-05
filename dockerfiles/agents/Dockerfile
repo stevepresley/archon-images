@@ -1,5 +1,5 @@
 # Fast single-stage agents build with security hardening
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Set proper environment defaults for Kubernetes
 ENV HOST=0.0.0.0
@@ -20,8 +20,8 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 # Copy and install requirements from local source
-COPY requirements.agents.txt .
-RUN pip install --no-cache-dir -r requirements.agents.txt
+COPY pyproject.toml uv.lock ./
+RUN pip install --upgrade pip && pip install --no-cache-dir -e . --group agents --group server
 
 # Copy application code
 COPY . .

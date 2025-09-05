@@ -1,5 +1,5 @@
 # MCP Service - Lightweight HTTP-based microservice  
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -11,14 +11,14 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 # Install dependencies
-COPY requirements.mcp.txt .
-RUN pip install --no-cache-dir -r requirements.mcp.txt
+COPY pyproject.toml uv.lock ./
+RUN pip install --upgrade pip && pip install --no-cache-dir -e . --group mcp --group server
 
 # Create minimal directory structure
-RUN mkdir -p src/mcp/modules src/server/services src/server/config
+RUN mkdir -p src/mcp_server/modules src/server/services src/server/config
 
 # Copy only MCP-specific files (lightweight protocol wrapper)
-COPY src/mcp/ src/mcp/
+COPY src/mcp_server/ src/mcp_server/
 COPY src/__init__.py src/
 
 # Copy only the minimal server files MCP needs for HTTP communication
@@ -54,4 +54,4 @@ EXPOSE ${ARCHON_MCP_PORT}
 # Health check disabled - use TCP checks in Kubernetes instead
 
 # Run the MCP server using module syntax (avoids naming conflicts)
-CMD ["python", "-m", "src.mcp.mcp_server"]
+CMD ["python", "-m", "src.mcp_server.mcp_server"]
