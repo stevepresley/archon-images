@@ -17,9 +17,9 @@ on:
         default: false
         type: boolean
 
-env:
+env:  
   UPSTREAM_REPO: coleam00/Archon
-
+  
 jobs:
   check-for-updates:
     runs-on: ubuntu-latest
