@@ -97,4 +97,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD python -c "import urllib.request, os; urllib.request.urlopen(f'http://localhost:{os.environ[\"ARCHON_SERVER_PORT\"]}/health').read()" || exit 1
 
 # Run the server with configurable port (using JSON array format for better signal handling)
-CMD ["sh", "-c", "python -m uvicorn src.server.main:socket_app --host 0.0.0.0 --port ${ARCHON_SERVER_PORT} --workers 1"]
+CMD ["sh", "-c", "python -m uvicorn src.server.main:app --host 0.0.0.0 --port ${ARCHON_SERVER_PORT} --workers 1"]
