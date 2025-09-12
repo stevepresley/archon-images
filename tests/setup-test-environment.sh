@@ -30,7 +30,24 @@ print_warning() {
 
 # Configuration
 UPSTREAM_REPO="https://github.com/stevepresley/archon_beta.git"
-ARCHON_REF="${1:-main}"  # Use provided ref or default to main
+FORCE_REFRESH=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --force|-f)
+            FORCE_REFRESH=true
+            shift
+            ;;
+        *)
+            ARCHON_REF="$1"
+            shift
+            ;;
+    esac
+done
+
+# Set default ref if not provided
+ARCHON_REF="${ARCHON_REF:-main}"
 SOURCE_DIR="/tmp/archon-source"
 
 print_status "Setting up test environment for Archon..."
@@ -38,7 +55,13 @@ print_status "Repository: $UPSTREAM_REPO"
 print_status "Reference: $ARCHON_REF"
 print_status "Target directory: $SOURCE_DIR"
 
-# Only clone if source directory doesn't exist
+# Remove existing source directory if force refresh is enabled
+if [ "$FORCE_REFRESH" = true ] && [ -d "$SOURCE_DIR" ]; then
+    print_status "Force refresh enabled - removing existing source directory..."
+    rm -rf "$SOURCE_DIR"
+fi
+
+# Clone if source directory doesn't exist
 if [ ! -d "$SOURCE_DIR" ]; then
     print_status "Cloning Archon repository..."
     if git clone --branch "$ARCHON_REF" --depth 1 "$UPSTREAM_REPO" "$SOURCE_DIR"; then
