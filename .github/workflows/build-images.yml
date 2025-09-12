@@ -112,8 +112,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           no-cache: true  # Force rebuild to see actual dependency installation
-          cache-from: type=gha,scope=build-${{ matrix.component.name }}
-          cache-to: type=gha,mode=max,scope=build-${{ matrix.component.name }}
           platforms: linux/amd64  # AMD64 only for faster builds
           provenance: true
           sbom: true
